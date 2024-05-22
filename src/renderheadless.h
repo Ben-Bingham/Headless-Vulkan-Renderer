@@ -64,7 +64,7 @@ public:
 
 	VkDebugReportCallbackEXT debugReportCallback{};
 
-	VulkanExample();
+	VulkanExample(std::string shaderPath);
 
 	~VulkanExample();
 

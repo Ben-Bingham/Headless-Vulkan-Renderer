@@ -81,7 +81,7 @@ void VulkanExample::submitWork(VkCommandBuffer cmdBuffer, VkQueue queue)
 	vkDestroyFence(device, fence, nullptr);
 }
 
-VulkanExample::VulkanExample()
+VulkanExample::VulkanExample(std::string shaderPath)
 {
 	LOG("Running headless rendering example\n");
 
@@ -517,7 +517,6 @@ VulkanExample::VulkanExample()
 		if (commandLineParser.isSet("shaders")) {
 			shaderDir = commandLineParser.getValueAsString("shaders", "glsl");
 		}
-		const std::string shadersPath = "./shaders/";
 
 		shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -526,8 +525,8 @@ VulkanExample::VulkanExample()
 		shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
 		shaderStages[1].pName = "main";
 
-		shaderStages[0].module = vks::tools::loadShader((shadersPath + "triangle.vert.spv").c_str(), device);
-		shaderStages[1].module = vks::tools::loadShader((shadersPath + "triangle.frag.spv").c_str(), device);
+		shaderStages[0].module = vks::tools::loadShader((shaderPath + "triangle.vert.spv").c_str(), device);
+		shaderStages[1].module = vks::tools::loadShader((shaderPath + "triangle.frag.spv").c_str(), device);
 
 		shaderModules = { shaderStages[0].module, shaderStages[1].module };
 		VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCreateInfo, nullptr, &pipeline));
@@ -775,7 +774,7 @@ VulkanExample::~VulkanExample()
 	}
 
 int main() {
-	VulkanExample vulkanExample{};
+	VulkanExample vulkanExample{"./shaders/"};
 	std::cout << "Finished. Press enter to terminate...";
 	std::cin.get();
 }
