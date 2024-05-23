@@ -1090,9 +1090,9 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 			vks::initializers::pipelineLayoutCreateInfo(nullptr, 0);
 
 		// MVP via push constant block
-		VkPushConstantRange pushConstantRange = vks::initializers::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), 0);
-		pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
-		pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
+		// VkPushConstantRange pushConstantRange = vks::initializers::pushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, sizeof(glm::mat4), 0);
+		// pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+		// pipelineLayoutCreateInfo.pPushConstantRanges = &pushConstantRange;
 
 		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
 
@@ -1230,17 +1230,19 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		std::vector<glm::vec3> pos = {
-			glm::vec3(-1.5f, 0.0f, -4.0f),
-			glm::vec3( 0.0f, 0.0f, -2.5f),
-			glm::vec3( 1.5f, 0.0f, -4.0f),
-		};
+		// std::vector<glm::vec3> pos = {
+		// 	glm::vec3(-1.5f, 0.0f, -4.0f),
+		// 	glm::vec3( 0.0f, 0.0f, -2.5f),
+		// 	glm::vec3( 1.5f, 0.0f, -4.0f),
+		// };
 
-		for (auto v : pos) {
-			glm::mat4 mvpMatrix = glm::perspective(glm::radians(60.0f), (float)width / (float)height, 0.1f, 256.0f) * glm::translate(glm::mat4(1.0f), v);
-			vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvpMatrix), &mvpMatrix);
-			vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
-		}
+		// for (auto v : pos) {
+		// 	glm::mat4 mvpMatrix = glm::perspective(glm::radians(60.0f), (float)width / (float)height, 0.1f, 256.0f) * glm::translate(glm::mat4(1.0f), v);
+		// 	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvpMatrix), &mvpMatrix);
+		// 	vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
+		// }
+
+		vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
 
 		vkCmdEndRenderPass(commandBuffer);
 
