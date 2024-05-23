@@ -62,9 +62,13 @@ public:
 	FrameBufferAttachment colorAttachment, depthAttachment;
 	VkRenderPass renderPass;
 
+	std::string shaderPath;
+
 	VkDebugReportCallbackEXT debugReportCallback{};
 
 	VulkanExample(std::string shaderPath);
+
+	unsigned char* render(size_t* imageDataSize, int32_t targetWidth, int32_t targetHeight);
 
 	~VulkanExample();
 
