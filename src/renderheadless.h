@@ -68,7 +68,7 @@ public:
 
 	VulkanExample(std::string shaderPath);
 
-	unsigned char* render(size_t* imageDataSize, int32_t targetWidth, int32_t targetHeight);
+	unsigned char* render(size_t* imageDataSize, int32_t targetWidth, int32_t targetHeight, VkSubresourceLayout* imageDataInfo);
 
 	~VulkanExample();
 
