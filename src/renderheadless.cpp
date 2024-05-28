@@ -8,6 +8,42 @@
 
 #include "renderheadless.h"
 
+HeadlessRenderer::HeadlessRenderer(std::string shaderPath)
+	: shaderPath(shaderPath) {}
+
+HeadlessRenderer::~HeadlessRenderer() {
+	vkDestroyBuffer(device, vertexBuffer, nullptr);
+	vkFreeMemory(device, vertexMemory, nullptr);
+	vkDestroyImageView(device, colorAttachment.view, nullptr);
+	vkDestroyImage(device, colorAttachment.image, nullptr);
+	vkFreeMemory(device, colorAttachment.memory, nullptr);
+	vkDestroyImageView(device, depthAttachment.view, nullptr);
+	vkDestroyImage(device, depthAttachment.image, nullptr);
+	vkFreeMemory(device, depthAttachment.memory, nullptr);
+	vkDestroyRenderPass(device, renderPass, nullptr);
+	vkDestroyFramebuffer(device, framebuffer, nullptr);
+	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+	vkDestroyPipeline(device, pipeline, nullptr);
+	vkDestroyPipelineCache(device, pipelineCache, nullptr);
+	vkDestroyCommandPool(device, commandPool, nullptr);
+
+	for (auto shadermodule : shaderModules) {
+		vkDestroyShaderModule(device, shadermodule, nullptr);
+	}
+	vkDestroyDevice(device, nullptr);
+
+#if VULKAN_DEBUG
+	if (debugReportCallback) {
+		PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallback = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT"));
+		assert(vkDestroyDebugReportCallback);
+		vkDestroyDebugReportCallback(instance, debugReportCallback, nullptr);
+	}
+#endif
+
+	vkDestroyInstance(instance, nullptr);
+}
+
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageCallback(
 	VkDebugReportFlagsEXT flags,
 	VkDebugReportObjectTypeEXT objectType,
@@ -22,12 +58,9 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageCallback(
 	return VK_FALSE;
 }
 
-CommandLineParser commandLineParser;
-
-
 VkDebugReportCallbackEXT debugReportCallback{};
 
-uint32_t VulkanExample::getMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties) {
+uint32_t HeadlessRenderer::getMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties) {
 	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
 	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &deviceMemoryProperties);
 	for (uint32_t i = 0; i < deviceMemoryProperties.memoryTypeCount; i++) {
@@ -41,8 +74,7 @@ uint32_t VulkanExample::getMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFl
 	return 0;
 }
 
-VkResult VulkanExample::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer *buffer, VkDeviceMemory *memory, VkDeviceSize size, void *data)
-{
+VkResult HeadlessRenderer::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer *buffer, VkDeviceMemory *memory, VkDeviceSize size, void *data) {
 	// Create the buffer handle
 	VkBufferCreateInfo bufferCreateInfo = vks::initializers::bufferCreateInfo(usageFlags, size);
 	bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -68,8 +100,7 @@ VkResult VulkanExample::createBuffer(VkBufferUsageFlags usageFlags, VkMemoryProp
 	return VK_SUCCESS;
 }
 
-void VulkanExample::submitWork(VkCommandBuffer cmdBuffer, VkQueue queue)
-{
+void HeadlessRenderer::submitWork(VkCommandBuffer cmdBuffer, VkQueue queue) {
 	VkSubmitInfo submitInfo = vks::initializers::submitInfo();
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &cmdBuffer;
@@ -81,10 +112,7 @@ void VulkanExample::submitWork(VkCommandBuffer cmdBuffer, VkQueue queue)
 	vkDestroyFence(device, fence, nullptr);
 }
 
-VulkanExample::VulkanExample(std::string shaderPath)
-	: shaderPath(shaderPath) {}
-
-unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth, int32_t targetHeight, VkSubresourceLayout* imageDataInfo) {
+void HeadlessRenderer::createInstance() {
 	VkApplicationInfo appInfo = {};
 	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	appInfo.pApplicationName = "Vulkan headless example";
@@ -100,7 +128,7 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 	const char* validationLayers[] = { "VK_LAYER_KHRONOS_validation" };
 
 	std::vector<const char*> instanceExtensions = {};
-#if DEBUG
+#if VULKAN_DEBUG
 	// Check if layers are available
 	uint32_t instanceLayerCount;
 	vkEnumerateInstanceLayerProperties(&instanceLayerCount, nullptr);
@@ -128,11 +156,12 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 		instanceCreateInfo.enabledLayerCount = layerCount;
 	}
 #endif
+
 	instanceCreateInfo.enabledExtensionCount = (uint32_t)instanceExtensions.size();
 	instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions.data();
 	VK_CHECK_RESULT(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
 
-#if DEBUG
+#if VULKAN_DEBUG
 	if (layersAvailable) {
 		VkDebugReportCallbackCreateInfoEXT debugReportCreateInfo = {};
 		debugReportCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT;
@@ -145,18 +174,17 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 		VK_CHECK_RESULT(vkCreateDebugReportCallbackEXT(instance, &debugReportCreateInfo, nullptr, &debugReportCallback));
 	}
 #endif
+}
 
-	// Vulkan device creation
+void HeadlessRenderer::createPhysicalDevice() {
 	uint32_t deviceCount = 0;
 	VK_CHECK_RESULT(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
 	std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
 	VK_CHECK_RESULT(vkEnumeratePhysicalDevices(instance, &deviceCount, physicalDevices.data()));
 	physicalDevice = physicalDevices[0];
+}
 
-	VkPhysicalDeviceProperties deviceProperties;
-	vkGetPhysicalDeviceProperties(physicalDevice, &deviceProperties);
-	
-	// Request a single graphics queue
+VkDeviceQueueCreateInfo HeadlessRenderer::requestGraphicsQueue() {
 	const float defaultQueuePriority(0.0f);
 	VkDeviceQueueCreateInfo queueCreateInfo = {};
 	uint32_t queueFamilyCount;
@@ -173,16 +201,27 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 			break;
 		}
 	}
-	// Create logical device
+
+	return queueCreateInfo;
+}
+
+void HeadlessRenderer::createLogicalDevice(VkDeviceQueueCreateInfo* queueCreateInfo) {
 	VkDeviceCreateInfo deviceCreateInfo = {};
 	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
 	deviceCreateInfo.queueCreateInfoCount = 1;
-	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+	deviceCreateInfo.pQueueCreateInfos = queueCreateInfo;
 	std::vector<const char*> deviceExtensions = {};
 
 	deviceCreateInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
 	deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
 	VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device));
+}
+
+unsigned char* HeadlessRenderer::render(int32_t targetWidth, int32_t targetHeight, VkSubresourceLayout* imageSubresourceLayout, const std::vector<float>& vertices) {
+	createInstance();
+	createPhysicalDevice();
+	VkDeviceQueueCreateInfo queueCreateInfo = requestGraphicsQueue();
+	createLogicalDevice(&queueCreateInfo);
 
 	// Get a graphics queue
 	vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
@@ -194,23 +233,8 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 	cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	VK_CHECK_RESULT(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &commandPool));
 
-	
-	// Prepare vertex and index buffers
-	struct Vertex {
-		float position[3];
-		float color[3];
-	};
-
-	{
-		std::vector<Vertex> vertices = {
-			{ {  1.0f,  1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-			{ { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-			{ {  0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
-		};
-		std::vector<uint32_t> indices = { 0, 1, 2 };
-
-		const VkDeviceSize vertexBufferSize = vertices.size() * sizeof(Vertex);
-		const VkDeviceSize indexBufferSize = indices.size() * sizeof(uint32_t);
+	{		
+		const VkDeviceSize vertexBufferSize = vertices.size() * sizeof(float);
 
 		VkBuffer stagingBuffer;
 		VkDeviceMemory stagingMemory;
@@ -230,45 +254,21 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 				&stagingBuffer,
 				&stagingMemory,
 				vertexBufferSize,
-				vertices.data());
+				(void*)vertices.data()
+			);
 
 			createBuffer(
 				VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
 				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 				&vertexBuffer,
 				&vertexMemory,
-				vertexBufferSize);
+				vertexBufferSize
+			);
 
 			VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufInfo));
 			VkBufferCopy copyRegion = {};
 			copyRegion.size = vertexBufferSize;
 			vkCmdCopyBuffer(copyCmd, stagingBuffer, vertexBuffer, 1, &copyRegion);
-			VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
-
-			submitWork(copyCmd, queue);
-
-			vkDestroyBuffer(device, stagingBuffer, nullptr);
-			vkFreeMemory(device, stagingMemory, nullptr);
-
-			// Indices
-			createBuffer(
-				VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-				&stagingBuffer,
-				&stagingMemory,
-				indexBufferSize,
-				indices.data());
-
-			createBuffer(
-				VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-				&indexBuffer,
-				&indexMemory,
-				indexBufferSize);
-
-			VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufInfo));
-			copyRegion.size = indexBufferSize;
-			vkCmdCopyBuffer(copyCmd, stagingBuffer, indexBuffer, 1, &copyRegion);
 			VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
 
 			submitWork(copyCmd, queue);
@@ -486,13 +486,12 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 		// Vertex bindings an attributes
 		// Binding description
 		std::vector<VkVertexInputBindingDescription> vertexInputBindings = {
-			vks::initializers::vertexInputBindingDescription(0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX),
+			vks::initializers::vertexInputBindingDescription(0, 3 * sizeof(float), VK_VERTEX_INPUT_RATE_VERTEX),
 		};
 
 		// Attribute descriptions
 		std::vector<VkVertexInputAttributeDescription> vertexInputAttributes = {
 			vks::initializers::vertexInputAttributeDescription(0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0),					// Position
-			vks::initializers::vertexInputAttributeDescription(0, 1, VK_FORMAT_R32G32B32_SFLOAT, sizeof(float) * 3),	// Color
 		};
 
 		VkPipelineVertexInputStateCreateInfo vertexInputState = vks::initializers::pipelineVertexInputStateCreateInfo();
@@ -502,11 +501,6 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 		vertexInputState.pVertexAttributeDescriptions = vertexInputAttributes.data();
 
 		pipelineCreateInfo.pVertexInputState = &vertexInputState;
-
-		std::string shaderDir = "glsl";
-		if (commandLineParser.isSet("shaders")) {
-			shaderDir = commandLineParser.getValueAsString("shaders", "glsl");
-		}
 
 		shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 		shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -567,21 +561,8 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 		// Render scene
 		VkDeviceSize offsets[1] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-		// std::vector<glm::vec3> pos = {
-		// 	glm::vec3(-1.5f, 0.0f, -4.0f),
-		// 	glm::vec3( 0.0f, 0.0f, -2.5f),
-		// 	glm::vec3( 1.5f, 0.0f, -4.0f),
-		// };
-
-		// for (auto v : pos) {
-		// 	glm::mat4 mvpMatrix = glm::perspective(glm::radians(60.0f), (float)width / (float)height, 0.1f, 256.0f) * glm::translate(glm::mat4(1.0f), v);
-		// 	vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(mvpMatrix), &mvpMatrix);
-		// 	vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
-		// }
-
-		vkCmdDrawIndexed(commandBuffer, 3, 1, 0, 0, 0);
+		vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
 		vkCmdEndRenderPass(commandBuffer);
 
@@ -684,29 +665,15 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 
 		vkGetImageSubresourceLayout(device, dstImage, &subResource, &subResourceLayout);
 
-		std::cout << "subResourceLayout.rowPitch: " << subResourceLayout.rowPitch << std::endl;
-		std::cout << "subResourceLayout.rowPitch / 4: " << subResourceLayout.rowPitch / 4 << std::endl;
-
-		std::cout << "subResourceLayout.size: " << subResourceLayout.size << std::endl;
-
-		std::cout << "subResourceLayout.row / 4 * targetHeight: " << subResourceLayout.rowPitch / 4 * targetHeight << std::endl;
-			std::cout << "subResourceLayout.row * targetHeight: " << subResourceLayout.rowPitch * targetHeight << std::endl;
-		std::cout << "targetWidth * targetHeight * 4:" << targetWidth * targetHeight * 4 << std::endl;
-			std::cout << "targetWidth * targetHeight:" << targetWidth * targetHeight << std::endl;
-		std::cout << "subResourceLayout.offset: " << subResourceLayout.offset << std::endl;
-
-
-		*imageDataInfo = subResourceLayout;
+		*imageSubresourceLayout = subResourceLayout;
 
 		// Map image memory so we can start copying from it
 		vkMapMemory(device, dstImageMemory, 0, VK_WHOLE_SIZE, 0, (void**)&imagedata);
 			imagedata += subResourceLayout.offset;
 		
-			*imageDataSize = subResourceLayout.size;
+			returnData = new unsigned char[imageSubresourceLayout->size];
 
-			returnData = new unsigned char[*imageDataSize];
-
-			std::memcpy(returnData, imagedata, *imageDataSize);
+			std::memcpy(returnData, imagedata, imageSubresourceLayout->size);
 
 		// Clean up resources
 		vkUnmapMemory(device, dstImageMemory);
@@ -719,42 +686,4 @@ unsigned char* VulkanExample::render(size_t* imageDataSize, int32_t targetWidth,
 	return returnData;
 }
 
-VulkanExample::~VulkanExample()
-	{
-		vkDestroyBuffer(device, vertexBuffer, nullptr);
-		vkFreeMemory(device, vertexMemory, nullptr);
-		vkDestroyBuffer(device, indexBuffer, nullptr);
-		vkFreeMemory(device, indexMemory, nullptr);
-		vkDestroyImageView(device, colorAttachment.view, nullptr);
-		vkDestroyImage(device, colorAttachment.image, nullptr);
-		vkFreeMemory(device, colorAttachment.memory, nullptr);
-		vkDestroyImageView(device, depthAttachment.view, nullptr);
-		vkDestroyImage(device, depthAttachment.image, nullptr);
-		vkFreeMemory(device, depthAttachment.memory, nullptr);
-		vkDestroyRenderPass(device, renderPass, nullptr);
-		vkDestroyFramebuffer(device, framebuffer, nullptr);
-		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-		vkDestroyPipeline(device, pipeline, nullptr);
-		vkDestroyPipelineCache(device, pipelineCache, nullptr);
-		vkDestroyCommandPool(device, commandPool, nullptr);
-		for (auto shadermodule : shaderModules) {
-			vkDestroyShaderModule(device, shadermodule, nullptr);
-		}
-		vkDestroyDevice(device, nullptr);
-#if DEBUG
-		if (debugReportCallback) {
-			PFN_vkDestroyDebugReportCallbackEXT vkDestroyDebugReportCallback = reinterpret_cast<PFN_vkDestroyDebugReportCallbackEXT>(vkGetInstanceProcAddr(instance, "vkDestroyDebugReportCallbackEXT"));
-			assert(vkDestroyDebugReportCallback);
-			vkDestroyDebugReportCallback(instance, debugReportCallback, nullptr);
-		}
-#endif
-		vkDestroyInstance(instance, nullptr);
 
-	}
-
-int main() {
-	VulkanExample vulkanExample{"./shaders/"};
-	std::cout << "Finished. Press enter to terminate...";
-	std::cin.get();
-}

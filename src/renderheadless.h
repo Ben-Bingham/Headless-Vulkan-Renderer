@@ -14,7 +14,6 @@
 
 #include <vulkan/vulkan.h>
 #include "VulkanTools.h"
-#include "CommandLineParser.hpp"
 
 #define DEBUG (!NDEBUG)
 
@@ -33,7 +32,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageCallback(
 	void* pUserData
 );
 
-class VulkanExample
+class HeadlessRenderer
 {
 public:
 	VkInstance instance;
@@ -48,8 +47,8 @@ public:
 	VkPipelineLayout pipelineLayout;
 	VkPipeline pipeline;
 	std::vector<VkShaderModule> shaderModules;
-	VkBuffer vertexBuffer, indexBuffer;
-	VkDeviceMemory vertexMemory, indexMemory;
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexMemory;
 
 	struct FrameBufferAttachment {
 		VkImage image;
@@ -66,11 +65,17 @@ public:
 
 	VkDebugReportCallbackEXT debugReportCallback{};
 
-	VulkanExample(std::string shaderPath);
+	HeadlessRenderer(std::string shaderPath);
+	~HeadlessRenderer();
 
-	unsigned char* render(size_t* imageDataSize, int32_t targetWidth, int32_t targetHeight, VkSubresourceLayout* imageDataInfo);
+private:
+	void createInstance();
+	void createPhysicalDevice();
+	VkDeviceQueueCreateInfo requestGraphicsQueue();
+	void createLogicalDevice(VkDeviceQueueCreateInfo* queueCreateInfo);
 
-	~VulkanExample();
+public:
+	unsigned char* render(int32_t targetWidth, int32_t targetHeight, VkSubresourceLayout* imageSubresourceLayout, const std::vector<float>& vertices);
 
 	uint32_t getMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties);
 
