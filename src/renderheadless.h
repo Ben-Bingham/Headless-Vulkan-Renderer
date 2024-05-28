@@ -56,7 +56,6 @@ public:
 		VkImageView view;
 	};
 
-	int32_t width, height;
 	VkFramebuffer framebuffer;
 	FrameBufferAttachment colorAttachment, depthAttachment;
 	VkRenderPass renderPass;
@@ -73,9 +72,15 @@ private:
 	void createPhysicalDevice();
 	VkDeviceQueueCreateInfo requestGraphicsQueue();
 	void createLogicalDevice(VkDeviceQueueCreateInfo* queueCreateInfo);
+	void copyVertexDataToGPU(const std::vector<float>& vertices);
+	void createAttachments(VkFormat colorFormat, VkFormat depthFormat, int targetWidth, int targetHeight);
+	void createRenderPipeline(VkFormat colorFormat, VkFormat depthFormat, int targetWidth, int targetHeight);
+	void createGraphicsPipeline();
+	void recordCommandBuffer(int targetWidth, int targetHeight);
+	unsigned char* copyToHost(int targetWidth, int targetHeight, VkSubresourceLayout* imageSubresourceLayout);
 
 public:
-	unsigned char* render(int32_t targetWidth, int32_t targetHeight, VkSubresourceLayout* imageSubresourceLayout, const std::vector<float>& vertices);
+	unsigned char* render(int targetWidth, int targetHeight, VkSubresourceLayout* imageSubresourceLayout, const std::vector<float>& vertices);
 
 	uint32_t getMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties);
 
